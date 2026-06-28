@@ -68,6 +68,10 @@ npm run dev
 npm run deploy
 ```
 
+### mail.yopzip.com hosting guide
+
+For the Cloudflare custom-domain happy path, including Access, Email Routing, Email Sending, verification, and rollback, see [`docs/cloudflare-yopzip-hosting.md`](docs/cloudflare-yopzip-hosting.md).
+
 ## Prerequisites
 
 - Cloudflare account with a domain

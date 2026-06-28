@@ -92,6 +92,12 @@ interface EmailListResponse {
 	totalCount: number;
 }
 
+export interface ReplyDraftPreview {
+	to: string;
+	subject: string;
+	body: string;
+}
+
 // ---------- API client ----------
 
 const api = {
@@ -144,6 +150,8 @@ const api = {
 	) => post<{ draft_id: string }>(`/api/v1/mailboxes/${mailboxId}/drafts`, draft),
 	replyToEmail: (mailboxId: string, emailId: string, email: unknown) =>
 		post<void>(`/api/v1/mailboxes/${mailboxId}/emails/${emailId}/reply`, email),
+	generateReplyDraftPreview: (mailboxId: string, emailId: string) =>
+		post<ReplyDraftPreview>(`/api/v1/mailboxes/${mailboxId}/emails/${emailId}/reply-draft-preview`),
 	forwardEmail: (mailboxId: string, emailId: string, email: unknown) =>
 		post<void>(`/api/v1/mailboxes/${mailboxId}/emails/${emailId}/forward`, email),
 

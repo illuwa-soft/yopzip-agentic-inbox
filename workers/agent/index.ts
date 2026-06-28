@@ -319,7 +319,119 @@ export class EmailAgent extends AIChatAgent<any> {
 				);
 			}
 		}
+		if (url.pathname === "/generateReplyDraftPreview" && request.method === "POST") {
+			try {
+				const emailData = await request.json() as {
+					mailboxId: string;
+					emailId: string;
+				};
+				const result = await this.handleGenerateReplyDraftPreview(emailData);
+				return new Response(JSON.stringify(result), {
+					status: "error" in result ? 422 : 200,
+					headers: { "Content-Type": "application/json" },
+				});
+			} catch (e) {
+				console.error("generateReplyDraftPreview handler failed:", (e as Error).message);
+				return new Response(
+					JSON.stringify({ error: (e as Error).message }),
+					{ status: 500, headers: { "Content-Type": "application/json" } },
+				);
+			}
+		}
 		return super.onRequest(request);
+	}
+
+	/**
+	 * Generate a reply preview for an explicit user action. Unlike the
+	 * auto-draft flow, this does not save anything to Drafts.
+	 */
+	async handleGenerateReplyDraftPreview(emailData: {
+		mailboxId: string;
+		emailId: string;
+	}) {
+		const env = this.env as Env;
+		const workersai = createWorkersAI({ binding: env.AI });
+		const systemPrompt = await getSystemPrompt(env, emailData.mailboxId);
+		const stub = getMailboxStub(env, emailData.mailboxId);
+
+		const email = (await stub.getEmail(emailData.emailId)) as EmailFull | null;
+		if (!email) return { error: "Email not found" };
+
+		const emailBody = stripHtmlToText(email.body || "");
+		if (await isPromptInjection(env.AI, email.body)) {
+			return { error: "Cannot generate a draft for this email." };
+		}
+
+		let threadContext = "";
+		if (email.thread_id) {
+			const threadEmails = (await stub.getEmails({ thread_id: email.thread_id })) as EmailMetadata[];
+			if (threadEmails.length > 1) {
+				const fullThread = await Promise.all(
+					threadEmails.map(async (e) => {
+						const full = (await stub.getEmail(e.id)) as EmailFull | null;
+						const text = full?.body ? stripHtmlToText(full.body) : "";
+						return { id: e.id, sender: e.sender, recipient: e.recipient, subject: e.subject, date: e.date, folder_id: e.folder_id, body_text: text };
+					}),
+				);
+				fullThread.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+				threadContext = fullThread
+					.map((e) => `[${e.date}] ${e.sender} → ${e.recipient} (${e.folder_id}): ${e.body_text.substring(0, 500)}`)
+					.join("\n\n");
+
+				if (threadContext && await isPromptInjection(env.AI, threadContext)) {
+					return { error: "Cannot generate a draft for this thread." };
+				}
+			}
+		}
+
+		const subject = email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`;
+		let prompt = `Draft a reply to this email. Return ONLY the reply body text that should go into the email composer. Do not include subject, recipient, markdown, explanations, tool names, or status messages.
+
+Email details:
+- Mailbox: ${emailData.mailboxId}
+- Email ID: ${emailData.emailId}
+- From: ${email.sender}
+- Subject: ${email.subject}
+- Thread ID: ${email.thread_id || emailData.emailId}
+
+Email body:
+${emailBody || "(empty email body)"}`;
+
+		if (threadContext) {
+			prompt += `
+
+Full thread history:
+${threadContext}`;
+		} else {
+			prompt += `
+
+This is the first message in the thread.`;
+		}
+
+		const result = await generateText({
+			model: workersai("@cf/moonshotai/kimi-k2.5"),
+			system: systemPrompt,
+			messages: await convertToModelMessages([
+				{
+					role: "user" as const,
+					parts: [{ type: "text" as const, text: prompt }],
+				},
+			]),
+			stopWhen: stepCountIs(1),
+		});
+
+		const sanitizedText = await verifyDraft(env.AI, result.text.trim());
+		if (!sanitizedText.trim()) {
+			return { error: "Draft generation returned an empty response." };
+		}
+
+		return {
+			to: email.sender.toLowerCase(),
+			subject,
+			body: /<[a-z][\s\S]*>/i.test(sanitizedText)
+				? sanitizedText
+				: textToHtml(sanitizedText),
+		};
 	}
 
 	/**

@@ -20,12 +20,16 @@ export default function SettingsRoute() {
 
 	const [displayName, setDisplayName] = useState("");
 	const [agentPrompt, setAgentPrompt] = useState("");
+	const [autoCreateReplyDrafts, setAutoCreateReplyDrafts] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 
 	useEffect(() => {
 		if (mailbox) {
 			setDisplayName(mailbox.settings?.fromName || mailbox.name || "");
 			setAgentPrompt(mailbox.settings?.agentSystemPrompt || "");
+			setAutoCreateReplyDrafts(
+				mailbox.settings?.aiDrafting?.autoCreateReplyDrafts === true,
+			);
 		}
 	}, [mailbox]);
 
@@ -35,6 +39,10 @@ export default function SettingsRoute() {
 		const settings = {
 			...mailbox.settings,
 			fromName: displayName,
+			aiDrafting: {
+				...mailbox.settings?.aiDrafting,
+				autoCreateReplyDrafts,
+			},
 			agentSystemPrompt: agentPrompt.trim() || undefined,
 		};
 		try {
@@ -82,6 +90,32 @@ export default function SettingsRoute() {
 						/>
 						<Input label="Email" type="email" value={mailbox.email} disabled />
 					</div>
+				</div>
+
+				{/* AI Drafting */}
+				<div className="rounded-lg border border-kumo-line bg-kumo-base p-5">
+					<div className="flex items-center gap-2 mb-4">
+						<RobotIcon size={16} weight="duotone" className="text-kumo-subtle" />
+						<span className="text-sm font-medium text-kumo-default">
+							AI Drafting
+						</span>
+					</div>
+					<label className="flex items-start gap-3 cursor-pointer">
+						<input
+							type="checkbox"
+							checked={autoCreateReplyDrafts}
+							onChange={(e) => setAutoCreateReplyDrafts(e.target.checked)}
+							className="mt-0.5 h-4 w-4 rounded border-kumo-line accent-kumo-brand"
+						/>
+						<span className="flex-1">
+							<span className="block text-sm font-medium text-kumo-default">
+								Automatically create reply drafts for new emails
+							</span>
+							<span className="block text-xs text-kumo-subtle mt-1 leading-relaxed">
+								When enabled, the agent reads new inbound emails and creates reply drafts for review. Drafts are never sent automatically.
+							</span>
+						</span>
+					</label>
 				</div>
 
 				{/* Agent System Prompt */}

@@ -3,9 +3,10 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Banner, Button, Input } from "@cloudflare/kumo";
-import { FloppyDiskIcon, PaperPlaneTiltIcon, XIcon } from "@phosphor-icons/react";
+import { FloppyDiskIcon, PaperPlaneTiltIcon, RobotIcon, XIcon } from "@phosphor-icons/react";
 import { useParams } from "react-router";
 import { useComposeForm } from "~/hooks/useComposeForm";
+import { stripHtml } from "~/lib/utils";
 import RichTextEditor from "./RichTextEditor";
 
 export default function ComposePanel() {
@@ -28,9 +29,16 @@ export default function ComposePanel() {
 		body,
 		setBody,
 		error,
+		draftPreview,
+		generateDraftError,
+		canGenerateDraft,
+		isGeneratingDraft,
 		isSavingDraft,
 		isSending,
 		formTitle,
+		handleGenerateDraftPreview,
+		handleApplyDraftPreview,
+		handleDismissDraftPreview,
 		handleSaveDraft,
 		handleSend,
 		closeCompose,
@@ -44,6 +52,19 @@ export default function ComposePanel() {
 					{formTitle}
 				</h2>
 				<div className="flex items-center gap-1">
+					{canGenerateDraft && (
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							icon={<RobotIcon size={14} />}
+							loading={isGeneratingDraft}
+							disabled={isSending || isGeneratingDraft}
+							onClick={handleGenerateDraftPreview}
+						>
+							{isGeneratingDraft ? "Generating..." : "Generate Draft"}
+						</Button>
+					)}
 					<Button
 						variant="ghost"
 						shape="square"
@@ -62,6 +83,7 @@ export default function ComposePanel() {
 			>
 				<div className="p-4 md:p-6 space-y-4">
 					{error && <Banner variant="error" text={error} />}
+					{generateDraftError && <Banner variant="error" text={generateDraftError} />}
 
 					<div className="space-y-3">
 						<div className="flex items-center gap-2">
@@ -146,6 +168,25 @@ export default function ComposePanel() {
 							onChange={setBody}
 						/>
 					</div>
+
+					{draftPreview && (
+						<div className="rounded-lg border border-kumo-line bg-kumo-elevated p-4 space-y-3">
+							<div>
+								<div className="text-sm font-medium text-kumo-default">AI draft preview</div>
+								<p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-kumo-strong">
+									{stripHtml(draftPreview)}
+								</p>
+							</div>
+							<div className="flex items-center justify-end gap-2">
+								<Button type="button" variant="ghost" size="sm" onClick={handleDismissDraftPreview}>
+									Dismiss
+								</Button>
+								<Button type="button" variant="primary" size="sm" onClick={handleApplyDraftPreview}>
+									Apply to message
+								</Button>
+							</div>
+						</div>
+					)}
 				</div>
 
 				{/* Footer actions */}

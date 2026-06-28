@@ -29,7 +29,7 @@ export async function isPromptInjection(ai: Ai, bodyHtml: string | null | undefi
 
 	try {
 		const response = (await ai.run(
-			"@cf/meta/llama-3.1-8b-instruct-fast" as any,
+			"@cf/meta/llama-3.1-8b-instruct-fast",
 			{
 				messages: [
 					{ role: "system", content: INJECTION_PROMPT },

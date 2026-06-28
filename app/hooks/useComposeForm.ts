@@ -14,7 +14,7 @@ import {
 	stripHtml,
 	toEmailListValue,
 } from "~/lib/utils";
-import { useDeleteEmail, useForwardEmail, useReplyToEmail, useSaveDraft, useSendEmail } from "~/queries/emails";
+import { useDeleteEmail, useForwardEmail, useGenerateReplyDraftPreview, useReplyToEmail, useSaveDraft, useSendEmail } from "~/queries/emails";
 import { useMailbox } from "~/queries/mailboxes";
 import { useUIStore } from "~/hooks/useUIStore";
 
@@ -162,6 +162,13 @@ function buildInitialComposeFields(
 	};
 }
 
+function getReplyBodyTail(html: string): string {
+	const signatureMatch = html.match(/(<div style="border-top:[\s\S]*)$/i);
+	if (signatureMatch) return signatureMatch[1];
+	const quoteMatch = html.match(/(<br><blockquote[\s\S]*)$/i);
+	return quoteMatch ? quoteMatch[1] : "";
+}
+
 export function useComposeForm(mailboxId?: string, _folder?: string) {
 	const toastManager = useKumoToastManager();
 	const { composeOptions, closePanel, closeCompose } = useUIStore();
@@ -171,6 +178,7 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 	const replyMutation = useReplyToEmail();
 	const forwardMutation = useForwardEmail();
 	const deleteEmailMutation = useDeleteEmail();
+	const generateReplyDraftPreviewMutation = useGenerateReplyDraftPreview();
 
 	const [to, setTo] = useState("");
 	const [cc, setCc] = useState("");
@@ -179,10 +187,15 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 	const [subject, setSubject] = useState("");
 	const [body, setBody] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [draftPreview, setDraftPreview] = useState<string | null>(null);
+	const [generateDraftError, setGenerateDraftError] = useState<string | null>(null);
 	const [isSavingDraft, setIsSavingDraft] = useState(false);
 	const [isSending, setIsSending] = useState(false);
 	const lastInitializedOptionsRef = useRef<typeof composeOptions | null>(null);
 	const isDraftEdit = !!composeOptions.draftEmail;
+	const canGenerateDraft = !isDraftEdit &&
+		(composeOptions.mode === "reply" || composeOptions.mode === "reply-all") &&
+		!!composeOptions.originalEmail?.id;
 
 	const formTitle = useMemo(() => {
 		if (isDraftEdit) return "Edit Draft";
@@ -201,6 +214,8 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 			sigBlock,
 		);
 		setError(null);
+		setDraftPreview(null);
+		setGenerateDraftError(null);
 		setTo(initialFields.to);
 		setCc(initialFields.cc);
 		setBcc(initialFields.bcc);
@@ -208,6 +223,38 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 		setSubject(initialFields.subject);
 		setBody(initialFields.body);
 	}, [composeOptions, currentMailbox?.email, sigBlock]);
+
+	const handleGenerateDraftPreview = async () => {
+		const originalEmailId = composeOptions.originalEmail?.id;
+		if (!mailboxId || !originalEmailId || !canGenerateDraft) return;
+		setGenerateDraftError(null);
+		try {
+			const preview = await generateReplyDraftPreviewMutation.mutateAsync({
+				mailboxId,
+				emailId: originalEmailId,
+			});
+			setTo(preview.to);
+			setSubject(preview.subject);
+			setDraftPreview(preview.body);
+		} catch (err: unknown) {
+			const message = (err instanceof Error ? err.message : null) || "Failed to generate draft.";
+			setGenerateDraftError(message);
+			toastManager.add({ title: message, variant: "error" });
+		}
+	};
+
+	const handleApplyDraftPreview = () => {
+		if (!draftPreview) return;
+		const tail = getReplyBodyTail(body);
+		setBody(`${draftPreview}${tail}`);
+		setDraftPreview(null);
+		setGenerateDraftError(null);
+	};
+
+	const handleDismissDraftPreview = () => {
+		setDraftPreview(null);
+		setGenerateDraftError(null);
+	};
 
 	const handleSaveDraft = async () => {
 		if (!mailboxId || isSending) return; setIsSavingDraft(true); setError(null);
@@ -262,5 +309,5 @@ export function useComposeForm(mailboxId?: string, _folder?: string) {
 		finally { setIsSending(false); }
 	};
 
-	return { to, setTo, cc, setCc, bcc, setBcc, showCcBcc, setShowCcBcc, subject, setSubject, body, setBody, error, setError, isSavingDraft, isSending, formTitle, handleSaveDraft, handleSend, closeCompose, closePanel };
+	return { to, setTo, cc, setCc, bcc, setBcc, showCcBcc, setShowCcBcc, subject, setSubject, body, setBody, error, setError, draftPreview, generateDraftError, canGenerateDraft, isGeneratingDraft: generateReplyDraftPreviewMutation.isPending, isSavingDraft, isSending, formTitle, handleGenerateDraftPreview, handleApplyDraftPreview, handleDismissDraftPreview, handleSaveDraft, handleSend, closeCompose, closePanel };
 }

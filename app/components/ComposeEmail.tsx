@@ -3,9 +3,10 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 import { Banner, Button, Dialog, Input, Text } from "@cloudflare/kumo";
-import { FloppyDiskIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
+import { FloppyDiskIcon, PaperPlaneTiltIcon, RobotIcon } from "@phosphor-icons/react";
 import { useParams } from "react-router";
 import { useComposeForm } from "~/hooks/useComposeForm";
+import { stripHtml } from "~/lib/utils";
 import RichTextEditor from "./RichTextEditor";
 import { useUIStore } from "~/hooks/useUIStore";
 
@@ -31,9 +32,16 @@ export default function ComposeEmail() {
 		body,
 		setBody,
 		error,
+		draftPreview,
+		generateDraftError,
+		canGenerateDraft,
+		isGeneratingDraft,
 		isSavingDraft,
 		isSending,
 		formTitle,
+		handleGenerateDraftPreview,
+		handleApplyDraftPreview,
+		handleDismissDraftPreview,
 		handleSaveDraft,
 		handleSend,
 	} = useComposeForm(mailboxId, folder);
@@ -44,11 +52,27 @@ export default function ComposeEmail() {
 			onOpenChange={(open) => !open && !isSending && closeComposeModal()}
 		>
 			<Dialog size="lg" className="p-6 max-h-[85vh] overflow-y-auto">
-				<Dialog.Title className="text-lg font-semibold mb-5">
-					{formTitle}
-				</Dialog.Title>
+				<div className="mb-5 flex items-center justify-between gap-3">
+					<Dialog.Title className="text-lg font-semibold">
+						{formTitle}
+					</Dialog.Title>
+					{canGenerateDraft && (
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							icon={<RobotIcon size={14} />}
+							loading={isGeneratingDraft}
+							disabled={isSending || isGeneratingDraft}
+							onClick={handleGenerateDraftPreview}
+						>
+							{isGeneratingDraft ? "Generating..." : "Generate Draft"}
+						</Button>
+					)}
+				</div>
 				<form onSubmit={(e) => handleSend(e, closeComposeModal)} className="space-y-4">
 					{error && <Banner variant="error" text={error} />}
+					{generateDraftError && <Banner variant="error" text={generateDraftError} />}
 					<div className="flex items-center gap-2">
 						<div className="flex-1">
 							<Input
@@ -106,6 +130,24 @@ export default function ComposeEmail() {
 						</Text>
 						<RichTextEditor value={body} onChange={setBody} />
 					</div>
+					{draftPreview && (
+						<div className="rounded-lg border border-kumo-line bg-kumo-elevated p-4 space-y-3">
+							<div>
+								<div className="text-sm font-medium text-kumo-default">AI draft preview</div>
+								<p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-kumo-strong">
+									{stripHtml(draftPreview)}
+								</p>
+							</div>
+							<div className="flex items-center justify-end gap-2">
+								<Button type="button" variant="ghost" size="sm" onClick={handleDismissDraftPreview}>
+									Dismiss
+								</Button>
+								<Button type="button" variant="primary" size="sm" onClick={handleApplyDraftPreview}>
+									Apply to message
+								</Button>
+							</div>
+						</div>
+					)}
 					<div className="flex justify-between items-center pt-2">
 						<Button
 							type="button"

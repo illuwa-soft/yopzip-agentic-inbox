@@ -265,6 +265,16 @@ export function useReplyToEmail() {
 	});
 }
 
+export function useGenerateReplyDraftPreview() {
+	return useMutation({
+		mutationFn: ({
+			mailboxId,
+			emailId,
+		}: { mailboxId: string; emailId: string }) =>
+			api.generateReplyDraftPreview(mailboxId, emailId),
+	});
+}
+
 export function useForwardEmail() {
 	const invalidate = useInvalidateEmailData();
 	return useMutation({

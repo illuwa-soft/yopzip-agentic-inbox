@@ -87,6 +87,17 @@ You can ONLY draft emails. You do NOT have the ability to send emails directly.
 ## Draft Management
 Use discard_draft to delete drafts that the operator rejects or that are no longer needed.`;
 
+const DRAFT_PREVIEW_SYSTEM_PROMPT = `You write reply draft previews for an email composer.
+
+Return ONLY the email body text that should be inserted into the composer.
+
+Rules:
+- Do not call tools. There are no tools in this mode.
+- Do not say that you drafted, saved, created, checked, or reviewed anything.
+- Do not include subject lines, recipient fields, markdown, separators, or explanations.
+- Write like a real person. Short, direct, flowing prose. Plain text only.
+- Never send or imply that the email was sent. This is only a preview for the user to review.`;
+
 /**
  * Fetch the custom system prompt for a mailbox from its R2 settings.
  * Falls back to DEFAULT_SYSTEM_PROMPT if none is configured.
@@ -351,7 +362,6 @@ export class EmailAgent extends AIChatAgent<any> {
 	}) {
 		const env = this.env as Env;
 		const workersai = createWorkersAI({ binding: env.AI });
-		const systemPrompt = await getSystemPrompt(env, emailData.mailboxId);
 		const stub = getMailboxStub(env, emailData.mailboxId);
 
 		const email = (await stub.getEmail(emailData.emailId)) as EmailFull | null;
@@ -410,7 +420,7 @@ This is the first message in the thread.`;
 
 		const result = await generateText({
 			model: workersai("@cf/moonshotai/kimi-k2.5"),
-			system: systemPrompt,
+			system: DRAFT_PREVIEW_SYSTEM_PROMPT,
 			messages: await convertToModelMessages([
 				{
 					role: "user" as const,
